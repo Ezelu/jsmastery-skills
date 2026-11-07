@@ -1,0 +1,69 @@
+name: budget
+
+# Posts the load cost of the skills on every pull request that edits them.
+#
+# Why this exists: every SKILL.md loads in full on its path, every run, for every
+# user. A skill that quietly grows is a tax collected forever, and a budget nobody
+# sees in review is not a budget. `check.yml` already blocks a breach; this one
+# shows the daylight while it is still cheap to fix.
+
+on:
+  pull_request:
+    paths:
+      - "skills/**"
+      - "scripts/**"
+      - "package.json"
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  budget:
+    name: Report skill load cost
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # pipefail so a failing check still fails the job while tee keeps the report
+      # for the step below. Without it the pipe would mask the exit code.
+      - name: Run the portability and budget check
+        run: |
+          set -o pipefail
+          npm run check 2>&1 | tee budget.txt
+
+      - name: Comment the report
+        if: always() && github.event.pull_request.head.repo.full_name == github.repository
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const marker = '<!-- skill-budget -->';
+            const raw = fs.existsSync('budget.txt') ? fs.readFileSync('budget.txt', 'utf8').trim() : 'No report produced.';
+
+            const body = [
+              marker,
+              '### Skill load cost',
+              '',
+              'What this run loads, against budget. A budget is a target with room to work in, not a high water mark:',
+              '',
+              '```',
+              // Comment bodies cap at 65536 chars; keep a wide margin.
+              raw.slice(0, 55000),
+              '```',
+            ].join('\n');
+
+            const { owner, repo } = context.repo;
+            const issue_number = context.issue.number;
+            const { data: comments } = await github.rest.issues.listComments({ owner, repo, issue_number });
+            const previous = comments.find((c) => c.body?.includes(marker));
+
+            if (previous) {
+              await github.rest.issues.updateComment({ owner, repo, comment_id: previous.id, body });
+            } else {
+              await github.rest.issues.createComment({ owner, repo, issue_number, body });
+            }

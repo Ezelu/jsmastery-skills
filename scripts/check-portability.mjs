@@ -65,103 +65,11 @@ const WARN_AT = 0.9;
 const SKILL_BYTE_BUDGET = 32 * 1024;
 const SKILL_BYTE_OVERRIDES = {};
 const SUPPORT_MD_BYTE_BUDGET = 24 * 1024;
-const SUPPORT_MD_OVERRIDES = {
-  'architect/agent-prompt.md': 32 * 1024, // common spec writer prompt; ratchet down after more common-rule trimming
-  'architect/internal/design-conversation.md': 29 * 1024, // main-thread design walk; tool discovery split to internal/tool-discovery.md; split by stage if it grows further
-};
+const SUPPORT_MD_OVERRIDES = {}; // one file per skill: every skill is its SKILL.md, nothing to override
 const DESCRIPTION_CHAR_CAP = 400;
-const HOT_PATH_BUDGETS = [
-  {
-    name: 'architect main full-design path',
-    budget: 72 * 1024,
-    required: ['architect/SKILL.md', 'architect/internal/design-conversation.md', 'architect/internal/after-subagent.md'],
-  },
-  {
-    name: 'architect subagent write path',
-    budget: 56 * 1024,
-    required: ['architect/agent-prompt.md', 'architect/spec-template.md'],
-    oneOf: [
-      'architect/agent-modes/feature.md',
-      'architect/agent-modes/architecture.md',
-      'architect/agent-modes/enhancement.md',
-      'architect/agent-modes/cross-cutting.md',
-    ],
-  },
-  {
-    // Plan reads the router + one repo-shape variant + one chosen build-approach
-    // persona (all four personas are ~2.7KB, so facade.md stands in for the set).
-    name: 'scope plan path',
-    budget: 48 * 1024,
-    required: ['scope/SKILL.md', 'scope/modes/plan.md', 'scope/scope-template.md', 'scope/approaches/facade.md'],
-    oneOf: ['scope/modes/plan-greenfield.md', 'scope/modes/plan-brownfield.md', 'scope/modes/plan-monorepo.md'],
-  },
-  {
-    name: 'scope replan/add path',
-    budget: 25 * 1024,
-    required: ['scope/SKILL.md', 'scope/scope-template.md'],
-    oneOf: ['scope/modes/replan.md', 'scope/modes/add.md'],
-  },
-  {
-    // The reference-file half of a UI build, checked on its own so a bloated
-    // guide is attributable. The full main-thread read is the union group below.
-    //
-    // Raised 48K -> 52K when the five bundled brand templates were deleted.
-    // `ui/generate.md` grew ~2.6KB to carry the derivation rules (accent, neutral
-    // ladder, WCAG verification, modular type scale) that those 177KB of templates
-    // used to supply by example. A from-scratch UI build now loads ~39KB LESS in
-    // total, because no ~43KB template is read behind this path any more. This is
-    // a path genuinely needing to carry more, not a ratchet to dodge a breach.
-    name: 'develop UI path',
-    budget: 52 * 1024,
-    required: ['develop/ui-guide.md', 'develop/ui/implementation.md'],
-    oneOf: ['develop/ui/mcp.md', 'develop/ui/image.md', 'develop/ui/existing.md', 'develop/ui/generate.md'],
-  },
-  {
-    // Worst-case main-thread read: router + the tool-skills sweep (greenfield/
-    // whole-repo only) + the largest single phase mode file.
-    //
-    // Raised 25K -> 26K when the Agent Skill and MCP consent gate landed in
-    // `modes/tool-skills.md`. That gate is required behaviour (nothing may be
-    // searched before the engineer agrees), so this path genuinely carries more.
-    // Paid for partly by trimming the duplicated Portability block in SKILL.md.
-    name: 'audit phase path',
-    budget: 26 * 1024,
-    required: ['audit/SKILL.md', 'audit/modes/tool-skills.md'],
-    oneOf: ['audit/modes/greenfield.md', 'audit/modes/whole-repo.md', 'audit/modes/area.md', 'audit/modes/gapfill.md'],
-  },
-  {
-    // First-run setup path reads the router spine plus modes/setup.md; the
-    // common write path reads the router alone (SKILL.md budget covers it).
-    name: 'test setup path',
-    budget: 26 * 1024,
-    required: ['test/SKILL.md', 'test/modes/setup.md'],
-  },
-  {
-    // Build path: gate router + post-gate build flow + the larger track guide.
-    // The gate-only path (route to /architect) reads SKILL.md alone.
-    name: 'develop build path',
-    budget: 51 * 1024,
-    required: ['develop/SKILL.md', 'develop/flow/build.md'],
-    oneOf: ['develop/ui-guide.md', 'develop/logical-guide.md'],
-  },
-  {
-    // The heaviest real read in the suite, and the one the two develop groups
-    // above miss: they overlap on ui-guide.md and never sum, so nothing watched
-    // what a UI build actually loads into the main thread. This is now the whole
-    // read: the brand design templates are gone, so nothing else loads lazily
-    // behind it, and `ui/generate.md` derives the system instead of copying one.
-    name: 'develop UI build path (full main-thread read)',
-    budget: 90 * 1024,
-    required: [
-      'develop/SKILL.md',
-      'develop/flow/build.md',
-      'develop/ui-guide.md',
-      'develop/ui/implementation.md',
-      'develop/checklist.md',
-    ],
-    oneOf: ['develop/ui/mcp.md', 'develop/ui/image.md', 'develop/ui/existing.md', 'develop/ui/generate.md'],
-  },
-];
+// Hot path budgets lived here while a run could load a mode file behind a router.
+// With one file per skill, a skill's own SKILL.md budget is the whole load, so a
+// second aggregate budget models nothing. Deleted with the mode files.
 
 function walk(dir) {
   for (const entry of readdirSync(dir)) {
@@ -308,36 +216,6 @@ function check(path) {
 
 walk(SKILLS_DIR.replace(/\/$/, ''));
 
-// Rule 5b — aggregate hot-path budgets. These model the largest combination
-// a normal run should need after router files load their selected references.
-for (const group of HOT_PATH_BUDGETS) {
-  let bytes = 0;
-  for (const rel of group.required) {
-    bytes += Buffer.byteLength(readFileSync(join(SKILLS_DIR, rel), 'utf8'), 'utf8');
-  }
-  if (group.oneOf) {
-    let largest = 0;
-    let largestRel = '';
-    for (const rel of group.oneOf) {
-      const size = Buffer.byteLength(readFileSync(join(SKILLS_DIR, rel), 'utf8'), 'utf8');
-      if (size > largest) {
-        largest = size;
-        largestRel = rel;
-      }
-    }
-    bytes += largest;
-    group.detail = ` (largest optional: ${largestRel})`;
-  }
-  group.bytes = bytes;
-  if (bytes > group.budget) {
-    violations.push(`${group.name}: ${bytes} bytes exceeds hot-path budget of ${group.budget}${group.detail ?? ''}`);
-  } else if (bytes / group.budget > WARN_AT) {
-    warnings.push(
-      `${group.name}: ${bytes}/${group.budget} bytes (${(100 * bytes / group.budget).toFixed(1)}% of budget) — shrink it before it breaks`
-    );
-  }
-}
-
 // Rule 9 — shared contract blocks stay byte-identical across the skills that
 // carry them. Skills install as independent folders, so a rule two skills must
 // both obey cannot live in one shared file; it is duplicated on purpose and
@@ -401,18 +279,6 @@ const pad = Math.max(...report.map(s => s.rel.length));
 console.log('\nHeaviest instruction files (words · bytes):');
 for (const s of report) {
   console.log(`  ${s.rel.padEnd(pad)}  ${String(s.words).padStart(5)} w · ${String(s.bytes).padStart(6)} b`);
-}
-
-// Hot-path utilization — what each real run loads, against its budget. A budget
-// with no daylight in it is a tripwire, not a budget, so show the daylight.
-const hpPad = Math.max(...HOT_PATH_BUDGETS.map(g => g.name.length));
-console.log('\nHot-path budgets (bytes used / budget · utilization):');
-for (const g of HOT_PATH_BUDGETS) {
-  const pct = (100 * g.bytes) / g.budget;
-  const flag = pct > 100 * WARN_AT ? '  <-- shrink this' : '';
-  console.log(
-    `  ${g.name.padEnd(hpPad)}  ${String(g.bytes).padStart(6)} / ${String(g.budget).padStart(6)}  ${pct.toFixed(1).padStart(5)}%${flag}`
-  );
 }
 
 if (warnings.length) {

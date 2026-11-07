@@ -1,8 +1,7 @@
 ---
 name: check
-allowed-tools: Bash, Read, Grep, Glob, Write, Agent
-argument-hint: [verify | review]
-description: "Confirm a change before merge. `/check verify` drives the real app to prove behavior against the spec (every acceptance criterion met, every surface built). `/check review` runs a senior code review on a fresh model, one that did not write the code. Verify after /develop, review before a PR. Writes to docs/reviews/, never edits code."
+allowed-tools: Bash, Read, Grep, Glob, Write
+description: "Run /check verify to drive the real app and prove each acceptance criterion. Run /check review for a fresh read of the diff against a fixed checklist. Neither mode edits code: verify points at /debug, review reports findings ranked by severity into docs/reviews/. Say plainly in both that review is a self review, not an independent one."
 ---
 
 ## Output style (plain words, no dashes, no hyphens)
@@ -13,40 +12,41 @@ Write everything this skill produces, files and messages alike, in plain simple 
 
 ## What this skill does
 
-`/check` is the gate before merge. Two modes, separate jobs, usually both, verify first:
+Two jobs that people confuse. `verify` runs the real thing and watches it behave. `review` reads the diff cold and looks for what running it would not catch.
 
-- **`verify`** (runtime proof): run the real app and watch the change behave. Proves it works and conforms to the spec (every acceptance criterion met, every specced surface built), which green tests never reveal. Read only on code, no durable files, main thread. Typically after `/develop`.
-- **`review`** (fresh model code review): a senior read of the diff on a **different model than wrote the code** (a model reviewing its own output shares its blind spots). Writes findings ranked by severity to `docs/reviews/`. Read only. Typically before a PR.
+## The honest limit of `review`
 
-Neither mode edits code. `verify` points failures at `/debug` or `/develop`; `review` reports findings to fix.
+An independent review means a model that did not write the code, on a different vendor, with no memory of the reasoning. **On a free tier that model is not reliably available**, so this skill does not pretend to it. It runs a fresh pass on the same model, with the conversation cleared and a fixed checklist, and it labels the output a self review.
 
-## Pick the mode (route before doing anything else)
+A self review catches less than an independent one. It still catches a useful amount, because the checklist is external and the context is fresh. Say which one you ran, every time. A review that oversells itself is worse than no review, because it buys false confidence.
 
-First step, before reading any mode file or touching the repo. Look at what followed `/check`:
+## Writes
 
-- **Starts with `verify` (or `run`)** → read `modes/verify.md`, follow it fully. Pass remaining arguments (feature name, scope) through.
-- **Starts with `review`** → read `modes/review.md`, follow it fully. Pass the steering through unchanged (e.g. `/check review with opus`, `/check review uncommitted`).
-- **No mode word, or ambiguous** (bare `/check`, or a feature name with no mode like `/check auth`) → do NOT guess, do NOT default. Show the two options as a plain text panel and **stop and wait** for the engineer's choice.
+`docs/reviews/NNNN-slug.md` in review mode. Nothing in verify mode: it reports.
 
-**How to present the choice (plain text, works on every agent, no interactive modal):**
+## Steps: verify
 
-Print exactly this, then stop and wait. Do not assume `verify` until they answer. Route on their typed word (`verify` / `review` / `both`).
+1. Read the governing spec. List its `AC` numbers.
+2. Start the app, or the service, using the commands in `AGENTS.md`. If it will not start, that is the finding; report it and stop.
+3. Walk each criterion against the running thing. For each, record the action you took and what you observed. Pass, fail, or untested, and never guess a pass from reading code.
+4. Any fail points at `/debug` with the reproduction you just performed. Do not fix it here.
 
-```
-Which check do you want to run? Type one:
-  • verify  run the real app and prove the change works against its spec (usually right after /develop)
-  • review  a fresh model senior read of the diff, ranked findings (usually right before a PR)
-  • both    verify first, then review
-```
+## Steps: review
 
-No interactive picker or modal: a typed choice shown inline behaves the same in every AI tool. (The `argument-hint` frontmatter also surfaces `verify | review` in Claude Code autocomplete; other tools ignore it, which is why this inline panel is the portable path.)
+1. Get the diff: staged, or against the base branch. Read it in full before reading anything else.
+2. Clear the context if the client allows it, then read the diff cold against the numbered criteria.
+3. Work the checklist: unhandled failure paths, inputs at the boundary, a value whose source is unnamed, an authorization check on the server rather than the screen, a test that asserts nothing, code that contradicts `AGENTS.md`.
+4. Rank each finding: `blocker`, `should fix`, `nitpick`. Give each one the file and line, what breaks, and the smallest fix. No finding without a way to see it.
+5. Write the file. Report the count by rank.
 
-If a feature name came with no mode (`/check auth`), carry it as the target once they pick; still ask the mode.
+## Rules
 
-Do not mix modes in one run. On **both**, do `verify` first, then offer `review` next.
+- **Never edit code.** Both modes report. An agent that fixes during review cannot be trusted to review its own fix.
+- **No finding without evidence.** If you did not see it in the diff or in the running app, it is a question, not a finding.
+- **Do not pad the list.** Three real findings beat eleven with eight nitpicks.
 
-## Portability (any OS, any agent)
+## Report
 
-Any Agent Skills client on macOS, Linux, or Windows. `git` is the only required CLI. Other shell snippets are POSIX reference, not literal scripts: use your agent's own cross platform file, process, and browser tools. Each mode file adds its own portability notes. No subagent support falls back to inline, noted per mode.
-
-Bundled files: `modes/verify.md`, `modes/review.md`, plus `review-agent-prompt.md` and `review-guide.md` for review. Read only the mode file you routed to; resolve the review bundled files to absolute paths when spawning the reviewer.
+Headline: pass or fail on verify, finding counts on review, and which review it was.
+Next: `/debug` for a failure, or fix the blockers and run it again.
+Pointer: `docs/reviews/`.
