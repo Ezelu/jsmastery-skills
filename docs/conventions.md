@@ -6,7 +6,7 @@ A skill file loads in full, on its path, every time it runs, so every line is a 
 
 - **A line must change what the agent does.** If the agent would already behave that way by default, the line is cost with no benefit, delete it (the whole sentence, not a few words). Vague encouragement the model already follows ("be careful", "be thorough", "think it through") is the usual offender.
 - **Instruct, don't justify.** Skills say what to do. The reasoning, the alternatives, and the history belong in the commit message and the PR that made the change, not the skill body. Keep at most a short clause of reason in the skill, and only where it stops the agent doing the wrong thing.
-- **Name a concept instead of explaining it.** Standard on terms the model already knows (idempotent, invariant, race condition, YAGNI, tracer bullet) rather than spelling them out. Spell out only the terms this repo invented (`Assumed` spec, workflow tier), and only once, in one place.
+- **Name a concept instead of explaining it.** Standard on terms the model already knows (idempotent, invariant, race condition, YAGNI, tracer bullet) rather than spelling them out. Spell out only the terms this repo invented (`assumed` spec, the `checks` column), and only once, in one place.
 - **Steps are instructions, not narrative.** No connecting paragraphs. Each step is one to three lines and ends in a checkable condition (`if X → do Y`, or a `[ ]` gate), not a description of what comes next.
 - **State a rule once.** If the same rule shows up twice, cut one and point to the other. One exception: each `SKILL.md` must stand alone for distribution, so a shared block (the output style) is intentionally repeated across skills, not factored out.
 
@@ -25,16 +25,18 @@ The report a skill prints at the end is read by a human scanning fast, so it lea
 
 Cut the field dump and the checklist of yeses (`Semantic HTML: correct`, `Keyboard: navigable`) Â· that is confirmation noise or already in a file, not something to reprint or relocate. Keep only the fields that are actionable for that skill (a PASS/FAIL verdict and its gaps, findings to fix, items invented for the engineer to review).
 
-## When to add a file
+## One file per skill, and nothing behind it
 
-Only when a piece of content is both **rarely needed and long** (a big migration rollout, an unusual edge case). Move it to a file the skill reads only when that case arises, so it stays off the common path. Do not split content that is short or common, inline it. When you do split, make the trigger explicit so the agent never misses it ("if X, read `Y` before continuing").
+There are no mode files, bundled guides, or separate agent prompts in this repo, and adding one needs a reason stronger than length.
+
+**Why:** a file behind a router is a load you pay for on the path that does not use it, and it is a second place the same rule can drift out of step. If a phase of the work does not fit on one screen, the skill is covering too many shapes of project. Split the *skill*, never the file.
 
 ## Before committing a skill edit
 
-- Run `npm run check` (cross tool portability + hot path size budgets). A path near budget means prune first, not raise the ceiling or add another file.
+- Run `npm run check` (cross tool portability, style rules, and the size budget). A file near budget means prune first, never raise the ceiling.
 - Re read the diff for lines that change nothing, and for a rule now stated twice.
 - A prune should not change behavior. If a cut might, say so and confirm it with a validation run.
 
 ## On size
 
-The budgets keep skills lean as they grow; a warning means prune, not that the limit is too low. Our skills interlock and carry modes, so they run larger than a single purpose skill. The target is "cut to what is needed", never a fixed line count.
+`npm run check` holds every `SKILL.md` to 32KB and warns past 90%. A warning means cut, not raise the ceiling. In practice the ceiling is far above where these files live: the heaviest skill here is under 4KB, and that headroom is the point. A skill that has to approach the budget is a skill that has stopped being about one phase of the work.
