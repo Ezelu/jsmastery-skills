@@ -8,7 +8,7 @@ The state lives in files (a scope, specs, AGENTS.md, tests), not in a chat sessi
 idea → /scope → /audit → /architect → /develop → /check verify → /test → /check review → /document → /sync
 ```
 
-Run `/debug` anytime something breaks. Run a bare `/scope` anytime to see where things stand.
+Run `/debug` anytime something breaks. Run a bare `/scope` anytime to see where things stand. Run `/standup` to pick work back up without reading the repo again.
 
 > 📖 **Want the full picture?** Read the **[Workflow Guide](docs/workflow-guide.md)** — a plain-language walkthrough of every skill, the files that carry the work, who owns what, and one idea followed all the way from scope to shipped.
 
@@ -25,6 +25,7 @@ Run `/debug` anytime something breaks. Run a bare `/scope` anytime to see where 
 | `document` | Writes the PR text, changelog, release note, or postmortem from the real diff. |
 | `sync` | Keeps AGENTS.md, the scope, and spec statuses current after a change. |
 | `debug` | Finds and fixes the root cause of a bug, then hands a regression test to `/test`. |
+| `standup` | Prints one screen on where the work stands: what moved in git, what is blocked, which specs owe a decision. |
 
 Hardening (systems level failure mode analysis) is temporarily removed and will return as a system design specialization.
 
@@ -41,6 +42,8 @@ npx skills@latest add jsmastery-pro/skills
 ```
 
 Works on any Agent Skills client (Claude Code, Cursor, Codex, Gemini CLI, and [more](https://agentskills.io/clients)). Commit the installed skills folder to share the workflow with your team.
+
+On a free tier, see **[Running these skills without a paid plan](docs/clients.md)** for the per client skills directories and the Gemini CLI setup.
 
 Each skill's instructions live in its `SKILL.md`, which is what every client reads. The `agents/openai.yaml` beside it is interface metadata only (the name, blurb, and opening prompt Codex shows in its agent picker); it carries no logic of its own.
 
